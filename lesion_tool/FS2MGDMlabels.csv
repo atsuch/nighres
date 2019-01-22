@@ -1,0 +1,45 @@
+FS_label_val,FS_label_name,brain-atlas-quant_label_val,brain-atlas-quant_label_name
+2,Left-Cerebral-White-Matter,47,Cerebrum-WML
+3,Left-Cerebral-Cortex,26,Cerebrum-GML       
+4,Left-Lateral-Ventricle,11,VentricleL
+5,Left-Inf-Lat-Vent,11,VentricleL
+7,Left-Cerebellum-White-Matter,46,Cerebellum-WM
+8,Left-Cerebellum-Cortex,25,Cerebellum-GM
+9,Left-Thalamus,38,ThalamusL	       
+10,Left-Thalamus-Proper*,38,ThalamusL      
+11,Left-Caudate,32,CaudateL	                           
+12,Left-Putamen,36,PutamenL	       
+13,Left-Pallidum,40,GlobusPallidusL
+14,3rd-Ventricle,13,Ventricle3
+15,4th-Ventricle,14,Ventricle4
+16,Brain-Stem,43,Brainstem	
+17,Left-Hippocampus,34,HippocampusL       
+18,Left-Amygdala,30,AmygdalaL			
+24,CSF,13,Ventricle3
+26,Left-Accumbens-area ,32,CaudateL	                           
+28,Left-VentralDC,,
+30,Left-vessel,36,PutamenL	       
+31,Left-choroid-plexus,17,ChoroidPlexusL
+41,Right-Cerebral-White-Matter,48,Cerebrum-WMR
+42,Right-Cerebral-Cortex,27,Cerebrum-GMR
+43,Right-Lateral-Ventricle,12,VentricleR        
+44,Right-Inf-Lat-Vent,12,VentricleR 
+46,Right-Cerebellum-White-Matter,46,Cerebellum-WM
+47,Right-Cerebellum-Cortex,25,Cerebellum-GM
+48,Right-Thalamus,39,ThalamusR     
+49,Right-Thalamus-Proper*,39,ThalamusR       
+50,Right-Caudate,33,CaudateR      
+51,Right-Putamen,37,PutamenR    
+52,Right-Pallidum,41,GlobusPallidusR      
+53,Right-Hippocampus,35,HippocampusR       
+54,Right-Amygdala,31,AmygdalaR	
+58,Right-Accumbens-area,33,CaudateR      
+60,Right-VentralDC,,
+62,Right-vessel,37,PutamenR    
+63,Right-choroid-plexus,18,ChoroidPlexusR
+77,WM-hypointensities,,
+251,CC_Posterior                            ,,
+252,CC_Mid_Posterior                        ,,
+253,CC_Central                              ,,
+254,CC_Mid_Anterior                         ,,
+255,CC_Anterior ,,
