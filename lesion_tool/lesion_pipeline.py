@@ -7,17 +7,16 @@ import os
 import cbstools
 from nipype.pipeline.engine import Workflow, Node
 from nipype.interfaces.base import traits, File
-from nipype.interfaces.utility import IdentityInterface
-from nipype.interfaces.dcm2nii import Dcm2nii
+from nipype.interfaces.utility import IdentityInterface, Function
 from nipype.interfaces.io import DataGrabber, FreeSurferSource
 from nipype.interfaces.ants.segmentation import N4BiasFieldCorrection
 from nipype.interfaces.freesurfer.preprocess import MRIConvert
 from nipype.interfaces.fsl.preprocess import BET, FLIRT
 from nipype.interfaces.fsl.maths import UnaryMaths, ApplyMask, Threshold
-from nipype.interfaces.fsl.utils import ImageMaths, Reorient2Std, Split
+from nipype.interfaces.fsl.utils import ImageMaths, Reorient2Std, ImageStats, Split
 from nipype.interfaces.fsl.base import FSLCommandInputSpec
-from nipype.interfaces.fsl import ImageStats
-from nipype.interfaces.utility import Function
+
+
 #import nighres
 from nighres.nighres.wrappers import MGDMSegmentation, EnhanceRegionContrast, ProbabilityToLevelset, DefineMultiRegionPriors, RecursiveRidgeDiffusion, LesionExtraction
 
@@ -65,16 +64,13 @@ def getFirstElement(inlist):
     return inlist[0]
 
 def Lesion_extractor(name='Lesion_Extractor',
-                     wf_name='Test',
                      base_dir='/homes_unix/alaurent/',
                      input_dir=None,
                      subjects=None,
-                     main=None,
-                     acc=None,
                      atlas='/homes_unix/alaurent/cbstools-public-master/atlases/brain-segmentation-prior3.0/brain-atlas-quant-3.0.8.txt',
                      fs_subjects_dir='/data/analyses/work_in_progress/freesurfer/fsmrishare-flair6.0/'):
     
-    wf = Workflow(wf_name)
+    wf = Workflow(name)
     wf.base_dir = base_dir
     
     #file = open(subjects,"r")
@@ -204,7 +200,7 @@ def Lesion_extractor(name='Lesion_Extractor',
     fsAseg = Node(MRIConvert(), name="fsAseg")
     fsAseg.inputs.ignore_exception = False
     fsAseg.inputs.out_datatype = 'float'
-    fsAseg.inputs.out_type = 'nii.gz'
+    fsAseg.inputs.out_type = 'niigz'
     fsAseg.inputs.resample_type = 'nearest'
     fsAseg.inputs.subjects_dir = fs_subjects_dir
     wf.connect(fsSource, 'aseg', fsAseg, 'in_file')
@@ -213,10 +209,10 @@ def Lesion_extractor(name='Lesion_Extractor',
     fsBrainmask = Node(MRIConvert(), name="fsBrainmask")
     fsBrainmask.inputs.ignore_exception = False
     fsBrainmask.inputs.out_datatype = 'float'
-    fsBrainmask.inputs.out_type = 'nii.gz'
+    fsBrainmask.inputs.out_type = 'niigz'
     fsBrainmask.inputs.resample_type = 'nearest'
     fsBrainmask.inputs.subjects_dir = fs_subjects_dir
-    wf.connect(fsSource, 'aseg', fsBrainmask, 'in_file')
+    wf.connect(fsSource, 'brainmask', fsBrainmask, 'in_file')
     wf.connect(T1NUC, 'output_image', fsBrainmask, 'reslice_like')
     
     '''    
