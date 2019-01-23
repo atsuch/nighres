@@ -12,31 +12,16 @@ from nipype.interfaces.io import DataGrabber, FreeSurferSource
 from nipype.interfaces.ants.segmentation import N4BiasFieldCorrection
 from nipype.interfaces.freesurfer.preprocess import MRIConvert
 from nipype.interfaces.fsl.preprocess import BET, FLIRT
-from nipype.interfaces.fsl.maths import UnaryMaths, ApplyMask, Threshold
-from nipype.interfaces.fsl.utils import ImageMaths, Reorient2Std, ImageStats, Split
-from nipype.interfaces.fsl.base import FSLCommandInputSpec
-
-
+from nipype.interfaces.fsl.utils import Reorient2Std, ImageStats, Split
+from nipype.interfaces.fsl.maths import (UnaryMaths, BinaryMaths, ApplyMask,
+                                         Threshold)
 #import nighres
-from nighres.nighres.wrappers import MGDMSegmentation, EnhanceRegionContrast, ProbabilityToLevelset, DefineMultiRegionPriors, RecursiveRidgeDiffusion, LesionExtraction
+from nighres.nighres.wrappers import (MGDMSegmentation, EnhanceRegionContrast,
+                                      ProbabilityToLevelset,
+                                      DefineMultiRegionPriors,
+                                      RecursiveRidgeDiffusion,
+                                      LesionExtraction)
 
-class AbcImageMathsInputSpec(FSLCommandInputSpec):
-    in_file = File(exists=True, argstr="%s", mandatory=True, position=1)
-    #in_file2 = File(exists=True, argstr="%s", position=3)
-    out_file = File(argstr="%s", position=4, genfile=True, hash_files=False)
-    op_string = traits.Str(argstr="%s", position=2,
-                           desc="string defining the operation, i. e. -add")
-    op_value = traits.Float(argstr="%.4f",position=3,des="value to perform operation with")
-    suffix = traits.Str(desc="out_file suffix")
-    out_data_type = traits.Enum('char', 'short', 'int', 'float', 'double',
-                               'input', argstr="-odt %s", position=5,
-                               desc=("output datatype, one of (char, short, "
-                                     "int, float, double, input)"))
-
-class AbcImageMaths(ImageMaths):
-    
-    input_spec = AbcImageMathsInputSpec
-    #output_spec = ImageMathsOutputSpec
     
 def getElementFromList(inlist,idx,slc=None):
     '''
@@ -113,14 +98,14 @@ def Lesion_extractor(name='Lesion_Extractor',
     # Reorient Volume
     T1Conv = Node(Reorient2Std(), name="ReorientVolume")
     T1Conv.inputs.ignore_exception = False
-    T1Conv.inputs.terminal_output = 'none'
+    T1Conv.terminal_output = 'none'
     T1Conv.inputs.out_file = "T1_reoriented.nii.gz"
     wf.connect(scanList, "T1", T1Conv, "in_file")
     
     # Reorient Volume (2)
     T2flairConv = Node(Reorient2Std(), name="ReorientVolume2")
     T2flairConv.inputs.ignore_exception = False
-    T2flairConv.inputs.terminal_output = 'none'
+    T2flairConv.terminal_output = 'none'
     T2flairConv.inputs.out_file = "FLAIR_reoriented.nii.gz"
     wf.connect(scanList, "FLAIR", T2flairConv, "in_file")
 
@@ -136,7 +121,7 @@ def Lesion_extractor(name='Lesion_Extractor',
     T1NUC.inputs.ignore_exception = False
     T1NUC.inputs.num_threads = 1
     T1NUC.inputs.save_bias = False
-    T1NUC.inputs.terminal_output = 'none'
+    T1NUC.terminal_output = 'none'
     wf.connect(T1Conv, "out_file", T1NUC , "input_image")
         
     # N3 Correction (2)
@@ -146,7 +131,7 @@ def Lesion_extractor(name='Lesion_Extractor',
     T2flairNUC.inputs.ignore_exception = False
     T2flairNUC.inputs.num_threads = 1
     T2flairNUC.inputs.save_bias = False
-    T2flairNUC.inputs.terminal_output = 'none'
+    T2flairNUC.terminal_output = 'none'
     wf.connect(T2flairConv, "out_file", T2flairNUC, "input_image")
     
     '''
@@ -161,22 +146,22 @@ def Lesion_extractor(name='Lesion_Extractor',
     getMaxT1NUC = Node(ImageStats(op_string= '-r'), name="getMaxT1NUC")
     wf.connect(T1NUC, 'output_image', getMaxT1NUC, 'in_file')
     
-    T1NUCirn = Node(AbcImageMaths(),name="IntensityNormalization")
-    T1NUCirn.inputs.op_string = "-div"
-    T1NUCirn.inputs.out_file = "normT1.nii.gz"
-    wf.connect(T1NUC, 'output_image', T1NUCirn,'in_file')
-    wf.connect(getMaxT1NUC, ('out_stat', getElementFromList, 1),
-               T1NUCirn, "op_value")
+    T1NUCirn = Node(BinaryMaths(), name="IntensityNormalization")
+    T1NUCirn.inputs.operation = 'div'
+    T1NUCirn.inputs.out_file = 'normT1.nii.gz'
+    wf.connect(T1NUC, "output_image", T1NUCirn, "in_file")
+    wf.connect(getMaxT1NUC, ("out_stat", getElementFromList, 1),
+               T1NUCirn, "operand_value")
     
     # Intensity Range Normalization (2)
     getMaxT2NUC = Node(ImageStats(op_string= '-r'), name="getMaxT2")
-    wf.connect(T2flairNUC, 'output_image', getMaxT2NUC, 'in_file')
+    wf.connect(T2flairNUC, "output_image", getMaxT2NUC, "in_file")
     
-    T2NUCirn = Node(AbcImageMaths(), name="IntensityNormalization2")
-    T2NUCirn.inputs.op_string = "-div"
-    T2NUCirn.inputs.out_file = "normT2.nii.gz"
-    wf.connect(T2flairNUC, 'output_image', T2NUCirn, 'in_file')
-    wf.connect(getMaxT2NUC, ('out_stat', getElementFromList, 1),
+    T2NUCirn = Node(BinaryMaths(), name="IntensityNormalization2")
+    T2NUCirn.inputs.operation = 'div'
+    T2NUCirn.inputs.out_file = 'normT2.nii.gz'
+    wf.connect(T2flairNUC, "output_image", T2NUCirn, "in_file")
+    wf.connect(getMaxT2NUC, ("out_stat", getElementFromList, 1),
                T2NUCirn, "op_value")
     
     '''
@@ -203,8 +188,8 @@ def Lesion_extractor(name='Lesion_Extractor',
     fsAseg.inputs.out_type = 'niigz'
     fsAseg.inputs.resample_type = 'nearest'
     fsAseg.inputs.subjects_dir = fs_subjects_dir
-    wf.connect(fsSource, 'aseg', fsAseg, 'in_file')
-    wf.connect(T1NUC, 'output_image', fsAseg, 'reslice_like')
+    wf.connect(fsSource, "aseg", fsAseg, "in_file")
+    wf.connect(T1NUC, "output_image", fsAseg, "reslice_like")
     
     fsBrainmask = Node(MRIConvert(), name="fsBrainmask")
     fsBrainmask.inputs.ignore_exception = False
@@ -212,8 +197,8 @@ def Lesion_extractor(name='Lesion_Extractor',
     fsBrainmask.inputs.out_type = 'niigz'
     fsBrainmask.inputs.resample_type = 'nearest'
     fsBrainmask.inputs.subjects_dir = fs_subjects_dir
-    wf.connect(fsSource, 'brainmask', fsBrainmask, 'in_file')
-    wf.connect(T1NUC, 'output_image', fsBrainmask, 'reslice_like')
+    wf.connect(fsSource, "brainmask", fsBrainmask, "in_file")
+    wf.connect(T1NUC, "output_image", fsBrainmask, "reslice_like")
     
     '''    
     #########################
@@ -243,7 +228,7 @@ def Lesion_extractor(name='Lesion_Extractor',
     wf.connect(T1NUCirn, "out_file", T1ss, "in_file")
     
     # Image Calculator
-    T2ss = Node(ApplyMask(), name="ImageCalculator")
+    T2ss = Node(ApplyMask(), name="T2ss")
 #    wf.connect(T1ss, "mask_file", T2ss, "mask_file")
     wf.connect(binFsMask, "out_file", T2ss, "mask_file")
     wf.connect(T2flairCoreg, "out_file", T2ss, "in_file")
@@ -263,7 +248,7 @@ def Lesion_extractor(name='Lesion_Extractor',
     T1ssNUC.inputs.ignore_exception = False
     T1ssNUC.inputs.num_threads = 1
     T1ssNUC.inputs.save_bias = False
-    T1ssNUC.inputs.terminal_output = 'none'
+    T1ssNUC.terminal_output = 'none'
     wf.connect(T1ss, "out_file", T1ssNUC, "input_image")
     
     # N3 Correction (4)
@@ -273,7 +258,7 @@ def Lesion_extractor(name='Lesion_Extractor',
     T2ssNUC.inputs.ignore_exception = False
     T2ssNUC.inputs.num_threads = 1
     T2ssNUC.inputs.save_bias = False
-    T2ssNUC.inputs.terminal_output = 'none'
+    T2ssNUC.terminal_output = 'none'
     wf.connect(T2ss, "out_file", T2ssNUC, "input_image")
     
     '''
@@ -286,26 +271,26 @@ def Lesion_extractor(name='Lesion_Extractor',
     '''
     
     # Intensity Range Normalization
-    getMaxT1ssNUC = Node(ImageStats(op_string= '-r'), name="getMaxT1ssNUC")
+    getMaxT1ssNUC = Node(ImageStats(op_string='-r'), name="getMaxT1ssNUC")
     wf.connect(T1ssNUC, 'output_image', getMaxT1ssNUC, 'in_file')
     
-    T1ssNUCirn = Node(AbcImageMaths(), name="IntensityNormalization3")
-    T1ssNUCirn.inputs.op_string = "-div"
-    T1ssNUCirn.inputs.out_file = "normT1ss.nii.gz"
-    wf.connect(T1ssNUC, 'output_image', T1ssNUCirn, 'in_file')
-    wf.connect(getMaxT1ssNUC, ('out_stat', getElementFromList, 1),
-               T1ssNUCirn, "op_value")
+    T1ssNUCirn = Node(BinaryMaths(), name="IntensityNormalization3")
+    T1ssNUCirn.inputs.operation = 'div'
+    T1ssNUCirn.inputs.out_file = 'normT1ss.nii.gz'
+    wf.connect(T1ssNUC, "output_image", T1ssNUCirn, "in_file")
+    wf.connect(getMaxT1ssNUC, ("out_stat", getElementFromList, 1),
+               T1ssNUCirn, "operand_value")
     
     # Intensity Range Normalization (2)
-    getMaxT2ssNUC = Node(ImageStats(op_string= '-r'), name="getMaxT2ssNUC")
-    wf.connect(T2ssNUC, 'output_image', getMaxT2ssNUC, 'in_file')
+    getMaxT2ssNUC = Node(ImageStats(op_string='-r'), name="getMaxT2ssNUC")
+    wf.connect(T2ssNUC, "output_image", getMaxT2ssNUC, "in_file")
     
-    T2ssNUCirn = Node(AbcImageMaths(),name="IntensityNormalization4")
-    T2ssNUCirn.inputs.op_string = "-div"
-    T2ssNUCirn.inputs.out_file = "normT2ss.nii.gz"
-    wf.connect(T2ssNUC, 'output_image', T2ssNUCirn, 'in_file')
-    wf.connect(getMaxT2ssNUC, ('out_stat', getElementFromList, 1),
-               T2ssNUCirn, "op_value")
+    T2ssNUCirn = Node(BinaryMaths(), name="IntensityNormalization4")
+    T2ssNUCirn.inputs.operation = 'div'
+    T2ssNUCirn.inputs.out_file = 'normT2ss.nii.gz'
+    wf.connect(T2ssNUC, "output_image", T2ssNUCirn, "in_file")
+    wf.connect(getMaxT2ssNUC, ("out_stat", getElementFromList, 1),
+               T2ssNUCirn, "operand_value")
     
     '''
     ####################################
@@ -315,7 +300,7 @@ def Lesion_extractor(name='Lesion_Extractor',
     '''
     
     # Recursive Ridge Diffusion
-    CSF_pv = Node(RecursiveRidgeDiffusion(),name='estimate_CSF_pv')
+    CSF_pv = Node(RecursiveRidgeDiffusion(), name='estimate_CSF_pv')
     CSF_pv.plugin_args = {'sbatch_args':'--mem 6000'}
     CSF_pv.inputs.ridge_intensities = "dark"
     CSF_pv.inputs.ridge_filter = "2D"
@@ -330,9 +315,10 @@ def Lesion_extractor(name='Lesion_Extractor',
     CSF_pv.inputs.max_iter = 100
     CSF_pv.inputs.max_diff = 0.001
     CSF_pv.inputs.save_data = True
-    wf.connect(subjectList, ('subject_id', createOutputDir, wf.base_dir, wf.name, CSF_pv.name),
-               CSF_pv, 'output_dir')
-    wf.connect(T1ssNUCirn, 'out_file', CSF_pv, 'input_image')
+    wf.connect(subjectList, ("subject_id", createOutputDir,
+                             wf.base_dir, wf.name, CSF_pv.name),
+               CSF_pv, "output_dir")
+    wf.connect(T1ssNUCirn, "out_file", CSF_pv, "input_image")
     
     '''
     ####################################
@@ -351,7 +337,7 @@ def Lesion_extractor(name='Lesion_Extractor',
                          name="FSlabels2MGDM")
     
     # Multi-contrast Brain Segmentation
-    MGDM = Node(MGDMSegmentation(),name='MGDM')
+    MGDM = Node(MGDMSegmentation(), name="MGDM")
     MGDM.plugin_args = {'sbatch_args':'--mem 7000'}
     MGDM.inputs.contrast_type1 = "Mprage3T"
     MGDM.inputs.contrast_type2 = "FLAIR3T"
@@ -365,128 +351,140 @@ def Lesion_extractor(name='Lesion_Extractor',
     
     
     # Enhance Region Contrast 
-    ERC = Node(EnhanceRegionContrast(),name='ERC')
-    ERC.plugin_args = {'sbatch_args':'--mem 7000'}
-    ERC.inputs.enhanced_region = "crwm"
-    ERC.inputs.contrast_background = "crgm"
+    ERC = Node(EnhanceRegionContrast(), name="ERC")
+    ERC.plugin_args = {'sbatch_args': '--mem 7000'}
+    ERC.inputs.enhanced_region = 'crwm'
+    ERC.inputs.contrast_background = 'crgm'
     ERC.inputs.partial_voluming_distance = 2.0
     ERC.inputs.save_data = True
     ERC.inputs.atlas_file = atlas
-    wf.connect(subjectList,('subject_id',createOutputDir,wf.base_dir,wf.name,ERC.name),ERC,'output_dir')
-    wf.connect(T1ssNUC,'output_image',ERC,'intensity_image')
-    wf.connect(MGDM,'segmentation',ERC,'segmentation_image')
-    wf.connect(MGDM,'distance',ERC,'levelset_boundary_image')
+    wf.connect(subjectList, ("subject_id", createOutputDir,
+                             wf.base_dir, wf.name, ERC.name),
+               ERC, "output_dir")
+    wf.connect(T1ssNUC, "output_image", ERC, "intensity_image")
+    wf.connect(MGDM, "segmentation", ERC, "segmentation_image")
+    wf.connect(MGDM, "distance", ERC, "levelset_boundary_image")
     
     # Enhance Region Contrast (2)
-    ERC2 = Node(EnhanceRegionContrast(),name='ERC2')
-    ERC2.plugin_args = {'sbatch_args':'--mem 7000'}
-    ERC2.inputs.enhanced_region = "crwm"
-    ERC2.inputs.contrast_background = "crgm"
+    ERC2 = Node(EnhanceRegionContrast(), name="ERC2")
+    ERC2.plugin_args = {'sbatch_args': '--mem 7000'}
+    ERC2.inputs.enhanced_region = 'crwm'
+    ERC2.inputs.contrast_background = 'crgm'
     ERC2.inputs.partial_voluming_distance = 2.0
     ERC2.inputs.save_data = True
     ERC2.inputs.atlas_file = atlas
-    wf.connect(subjectList,('subject_id',createOutputDir,wf.base_dir,wf.name,ERC2.name),ERC2,'output_dir')
-    wf.connect(T2ssNUC,'output_image',ERC2,'intensity_image')
-    wf.connect(MGDM,'segmentation',ERC2,'segmentation_image')
-    wf.connect(MGDM,'distance',ERC2,'levelset_boundary_image')
+    wf.connect(subjectList, ("subject_id", createOutputDir,
+                             wf.base_dir, wf.name, ERC2.name),
+               ERC2, "output_dir")
+    wf.connect(T2ssNUC, "output_image", ERC2, "intensity_image")
+    wf.connect(MGDM, "segmentation", ERC2, "segmentation_image")
+    wf.connect(MGDM, "distance", ERC2, "levelset_boundary_image")
     
     # Define Multi-Region Priors
-    DMRP = Node(DefineMultiRegionPriors(),name='DefineMultRegPriors')
+    DMRP = Node(DefineMultiRegionPriors(), name="DefineMultRegPriors")
     DMRP.plugin_args = {'sbatch_args':'--mem 6000'}
     #DMRP.inputs.defined_region = "ventricle-horns"
     #DMRP.inputs.definition_method = "closest-distance"
     DMRP.inputs.distance_offset = 3.0
     DMRP.inputs.save_data = True
     DMRP.inputs.atlas_file = atlas
-    wf.connect(subjectList,('subject_id',createOutputDir,wf.base_dir,wf.name,DMRP.name),DMRP,'output_dir')
-    wf.connect(MGDM,'segmentation',DMRP,'segmentation_image')
-    wf.connect(MGDM,'distance',DMRP,'levelset_boundary_image')
+    wf.connect(subjectList, ("subject_id", createOutputDir,
+                             wf.base_dir, wf.name, DMRP.name),
+               DMRP, "output_dir")
+    wf.connect(MGDM, "segmentation", DMRP,"segmentation_image")
+    wf.connect(MGDM, "distance", DMRP, "levelset_boundary_image")
     
     '''
     ###############################################
     ####      REMOVE VENTRICLE POSTERIOR       ####
     ###############################################
     Due to topology constraints, the ventricles are often not fully segmented:
-    here add back all ventricle voxels from the posterior probability (without the topology constraints)
+    here add back all ventricle voxels from the posterior probability (without 
+    the topology constraints)
     '''
     
     # Posterior label
-    PostLabel = Node(Split(),name='PosteriorLabel')
-    PostLabel.inputs.dimension = "t"
-    wf.connect(MGDM,'labels', PostLabel,'in_file')
+    PostLabel = Node(Split(), name="PosteriorLabel")
+    PostLabel.inputs.dimension = 't'
+    wf.connect(MGDM, "labels", PostLabel, "in_file")
 
     # Posterior proba
-    PostProba = Node(Split(),name='PosteriorProba')
-    PostProba.inputs.dimension = "t"
-    wf.connect(MGDM,'memberships', PostProba,'in_file')
+    PostProba = Node(Split(), name="PosteriorProba")
+    PostProba.inputs.dimension = 't'
+    wf.connect(MGDM, "memberships", PostProba, "in_file")
     
     # Threshold binary mask : ventricle label part 1
     VentLabel1 = Node(Threshold(), name="VentricleLabel1")
     VentLabel1.inputs.thresh = 10.5
-    VentLabel1.inputs.direction = "below"
-    wf.connect(PostLabel,("out_files",getFirstElement), VentLabel1, "in_file")
+    VentLabel1.inputs.direction = 'below'
+    wf.connect(PostLabel, ("out_files", getFirstElement),
+               VentLabel1, "in_file")
     
     # Threshold binary mask : ventricle label part 2
     VentLabel2 = Node(Threshold(), name="VentricleLabel2")
     VentLabel2.inputs.thresh = 13.5
-    VentLabel2.inputs.direction = "above"
-    wf.connect(VentLabel1,"out_file", VentLabel2, "in_file")
+    VentLabel2.inputs.direction = 'above'
+    wf.connect(VentLabel1, "out_file", VentLabel2, "in_file")
     
     # Image calculator : ventricle proba
-    VentProba = Node(ImageMaths(), name="VentricleProba")
-    VentProba.inputs.op_string = "-mul"
-    VentProba.inputs.out_file = "ventproba.nii.gz"
-    wf.connect(PostProba,("out_files",getFirstElement),VentProba,"in_file")
-    wf.connect(VentLabel2,"out_file", VentProba, "in_file2")
+    VentProba = Node(BinaryMaths(), name="VentricleProba")
+    VentProba.inputs.operaion = 'mul'
+    VentProba.inputs.out_file = 'ventproba.nii.gz'
+    wf.connect(PostProba, ("out_files", getFirstElement),
+               VentProba, "in_file")
+    wf.connect(VentLabel2, "out_file", VentProba, "operand_file")
     
     # Image calculator : remove inter ventricles
-    RmInterVent = Node(ImageMaths(), name="RemoveInterVent")
-    RmInterVent.inputs.op_string = "-sub"
-    RmInterVent.inputs.out_file = "rmintervent.nii.gz"
-    wf.connect(ERC,"region_pv",RmInterVent,"in_file")
-    wf.connect(DMRP, "inter_ventricular_pv", RmInterVent, "in_file2")
+    RmInterVent = Node(BinaryMaths(), name="RemoveInterVent")
+    RmInterVent.inputs.operation = 'sub'
+    RmInterVent.inputs.out_file = 'rmintervent.nii.gz'
+    wf.connect(ERC, "region_pv", RmInterVent, "in_file")
+    wf.connect(DMRP, "inter_ventricular_pv", RmInterVent, "operand_file")
     
     # Image calculator : add horns
-    AddHorns = Node(ImageMaths(), name="AddHorns")
-    AddHorns.inputs.op_string = "-add"
-    AddHorns.inputs.out_file = "rmvent.nii.gz"
-    wf.connect(RmInterVent,"out_file",AddHorns,"in_file")
-    wf.connect(DMRP, "ventricular_horns_pv", AddHorns, "in_file2")  
+    AddHorns = Node(BinaryMaths(), name="AddHorns")
+    AddHorns.inputs.operation = 'add'
+    AddHorns.inputs.out_file = 'rmvent.nii.gz"'
+    wf.connect(RmInterVent, "out_file", AddHorns, "in_file")
+    wf.connect(DMRP, "ventricular_horns_pv", AddHorns, "operand_file")  
     
     # Image calculator : remove ventricles
-    RmVent = Node(ImageMaths(), name="RemoveVentricles")
-    RmVent.inputs.op_string = "-sub"
-    RmVent.inputs.out_file = "rmvent.nii.gz"
-    wf.connect(AddHorns,"out_file",RmVent,"in_file")
-    wf.connect(VentProba, "out_file", RmVent, "in_file2")  
+    RmVent = Node(BinaryMaths(), name="RemoveVentricles")
+    RmVent.inputs.operation = 'sub'
+    RmVent.inputs.out_file = 'rmvent.nii.gz'
+    wf.connect(AddHorns, "out_file", RmVent, "in_file")
+    wf.connect(VentProba, "out_file", RmVent, "operand_file")  
     
     # Image calculator : remove internal capsule
-    RmIC = Node(ImageMaths(), name="RemoveInternalCap")
-    RmIC.inputs.op_string = "-sub"
-    RmIC.inputs.out_file = "rmic.nii.gz"
-    wf.connect(RmVent,"out_file",RmIC,"in_file")
-    wf.connect(DMRP, "internal_capsule_pv", RmIC, "in_file2")
+    RmIC = Node(BinaryMaths(), name="RemoveInternalCap")
+    RmIC.inputs.operation = 'sub'
+    RmIC.inputs.out_file = 'rmic.nii.gz'
+    wf.connect(RmVent, "out_file", RmIC, "in_file")
+    wf.connect(DMRP, "internal_capsule_pv", RmIC, "operand_file")
     
     # Intensity Range Normalization (3)
     getMaxRmIC = Node(ImageStats(op_string= '-r'), name="getMaxRmIC")
-    wf.connect(RmIC,'out_file',getMaxRmIC,'in_file')
+    wf.connect(RmIC, "out_file", getMaxRmIC, "in_file")
      
-    RmICirn = Node(AbcImageMaths(),name="IntensityNormalization5")
-    RmICirn.inputs.op_string = "-div"
-    RmICirn.inputs.out_file = "normRmIC.nii.gz"
-    wf.connect(RmIC,'out_file',RmICirn,'in_file')
-    wf.connect(getMaxRmIC,('out_stat',getElementFromList,1),RmICirn,"op_value")
+    RmICirn = Node(BinaryMaths(), name="IntensityNormalization5")
+    RmICirn.inputs.operation = 'div'
+    RmICirn.inputs.out_file = 'normRmIC.nii.gz'
+    wf.connect(RmIC, "out_file", RmICirn, "in_file")
+    wf.connect(getMaxRmIC, ("out_stat", getElementFromList, 1),
+               RmICirn, "operand_value")
     
     # Probability To Levelset : WM orientation
-    WM_Orient = Node(ProbabilityToLevelset(),name='WM_Orientation')
-    WM_Orient.plugin_args = {'sbatch_args':'--mem 6000'}
+    WM_Orient = Node(ProbabilityToLevelset(), name="WM_Orientation")
+    WM_Orient.plugin_args = {'sbatch_args': '--mem 6000'}
     WM_Orient.inputs.save_data = True
-    wf.connect(subjectList,('subject_id',createOutputDir,wf.base_dir,wf.name,WM_Orient.name),WM_Orient,'output_dir')
-    wf.connect(RmICirn,'out_file',WM_Orient,'probability_image')
+    wf.connect(subjectList, ("subject_id", createOutputDir,
+                             wf.base_dir, wf.name, WM_Orient.name),
+               WM_Orient, "output_dir")
+    wf.connect(RmICirn, "out_file", WM_Orient, "probability_image")
 
     # Recursive Ridge Diffusion : PVS in WM only
-    WM_pvs = Node(RecursiveRidgeDiffusion(),name='PVS_in_WM')
-    WM_pvs.plugin_args = {'sbatch_args':'--mem 6000'}
+    WM_pvs = Node(RecursiveRidgeDiffusion(), name="PVS_in_WM")
+    WM_pvs.plugin_args = {'sbatch_args': '--mem 6000'}
     WM_pvs.inputs.ridge_intensities = "bright"
     WM_pvs.inputs.ridge_filter = "1D"
     WM_pvs.inputs.orientation = "orthogonal"
@@ -500,14 +498,16 @@ def Lesion_extractor(name='Lesion_Extractor',
     WM_pvs.inputs.max_iter = 100
     WM_pvs.inputs.max_diff = 0.001
     WM_pvs.inputs.save_data = True
-    wf.connect(subjectList,('subject_id',createOutputDir,wf.base_dir,wf.name,WM_pvs.name),WM_pvs,'output_dir')
-    wf.connect(ERC,'background_proba',WM_pvs,'input_image')
-    wf.connect(WM_Orient,'levelset',WM_pvs,'surface_levelset')
-    wf.connect(RmICirn,'out_file',WM_pvs,'loc_prior')
+    wf.connect(subjectList, ("subject_id", createOutputDir,
+                             wf.base_dir, wf.name, WM_pvs.name),
+               WM_pvs, "output_dir")
+    wf.connect(ERC, "background_proba", WM_pvs, "input_image")
+    wf.connect(WM_Orient, "levelset", WM_pvs,"surface_levelset")
+    wf.connect(RmICirn, "out_file", WM_pvs, "loc_prior")
 
     # Extract Lesions : extract WM PVS
-    extract_WM_pvs = Node(LesionExtraction(),name='ExtractPVSfromWM')
-    extract_WM_pvs.plugin_args = {'sbatch_args':'--mem 6000'}
+    extract_WM_pvs = Node(LesionExtraction(), name="ExtractPVSfromWM")
+    extract_WM_pvs.plugin_args = {'sbatch_args': '--mem 6000'}
     extract_WM_pvs.inputs.gm_boundary_partial_vol_dist = 1.0
     extract_WM_pvs.inputs.csf_boundary_partial_vol_dist = 3.0
     extract_WM_pvs.inputs.lesion_clust_dist = 1.0
@@ -516,71 +516,78 @@ def Lesion_extractor(name='Lesion_Extractor',
     extract_WM_pvs.inputs.small_lesion_size = 4.0
     extract_WM_pvs.inputs.save_data = True
     extract_WM_pvs.inputs.atlas_file = atlas
-    wf.connect(subjectList,('subject_id',createOutputDir,wf.base_dir,wf.name,extract_WM_pvs.name),extract_WM_pvs,'output_dir')
-    wf.connect(WM_pvs,'propagation',extract_WM_pvs,'probability_image')
-    wf.connect(MGDM,'segmentation',extract_WM_pvs,'segmentation_image')
-    wf.connect(MGDM,'distance',extract_WM_pvs,'levelset_boundary_image')
-    wf.connect(RmICirn,'out_file',extract_WM_pvs,'location_prior_image')
+    wf.connect(subjectList, ("subject_id", createOutputDir,
+                             wf.base_dir, wf.name, extract_WM_pvs.name),
+               extract_WM_pvs, "output_dir")
+    wf.connect(WM_pvs, "propagation", extract_WM_pvs, "probability_image")
+    wf.connect(MGDM, "segmentation", extract_WM_pvs, "segmentation_image")
+    wf.connect(MGDM, "distance", extract_WM_pvs, "levelset_boundary_image")
+    wf.connect(RmICirn, "out_file", extract_WM_pvs, "location_prior_image")
     
     '''
     2nd branch
     '''
     
-    # Image calculator : internal capsule witout ventricules
-    ICwoVent = Node(ImageMaths(), name="ICWithoutVentricules")
-    ICwoVent.inputs.op_string = "-sub"
-    ICwoVent.inputs.out_file = "icwovent.nii.gz"
-    wf.connect(DMRP,"internal_capsule_pv",ICwoVent,"in_file")
-    wf.connect(DMRP,"inter_ventricular_pv", ICwoVent, "in_file2")
+    # Image calculator : internal capsule witout ventricles
+    ICwoVent = Node(BinaryMaths(), name="ICWithoutVentricles")
+    ICwoVent.inputs.operation = 'sub'
+    ICwoVent.inputs.out_file = 'icwovent.nii.gz'
+    wf.connect(DMRP, "internal_capsule_pv", ICwoVent, "in_file")
+    wf.connect(DMRP, "inter_ventricular_pv", ICwoVent, "operand_file")
     
     # Image calculator : remove ventricles IC
-    RmVentIC = Node(ImageMaths(), name="RmVentIC")
-    RmVentIC.inputs.op_string = "-sub"
-    RmVentIC.inputs.out_file = "RmVentIC.nii.gz"
-    wf.connect(ICwoVent,"out_file",RmVentIC,"in_file")
-    wf.connect(VentProba, "out_file", RmVentIC, "in_file2")
+    RmVentIC = Node(BinaryMaths(), name="RmVentIC")
+    RmVentIC.inputs.operation = 'sub'
+    RmVentIC.inputs.out_file = 'RmVentIC.nii.gz'
+    wf.connect(ICwoVent,"out_file", RmVentIC,"in_file")
+    wf.connect(VentProba, "out_file", RmVentIC, "operand_file")
 
     # Intensity Range Normalization (4)
     getMaxRmVentIC = Node(ImageStats(op_string= '-r'), name="getMaxRmVentIC")
-    wf.connect(RmVentIC,'out_file',getMaxRmVentIC,'in_file')
+    wf.connect(RmVentIC, "out_file", getMaxRmVentIC, "in_file")
      
-    RmVentICirn = Node(AbcImageMaths(),name="IntensityNormalization6")
-    RmVentICirn.inputs.op_string = "-div"
-    RmVentICirn.inputs.out_file = "normRmVentIC.nii.gz"
-    wf.connect(RmVentIC,'out_file',RmVentICirn,'in_file')
-    wf.connect(getMaxRmVentIC,('out_stat',getElementFromList,1),RmVentICirn,"op_value")
+    RmVentICirn = Node(BinaryMaths(), name="IntensityNormalization6")
+    RmVentICirn.inputs.operation = 'div'
+    RmVentICirn.inputs.out_file = 'normRmVentIC.nii.gz'
+    wf.connect(RmVentIC, "out_file", RmVentICirn, "in_file")
+    wf.connect(getMaxRmVentIC, ("out_stat", getElementFromList, 1),
+               RmVentICirn, "operand_value")
     
     # Probability To Levelset : IC orientation
-    IC_Orient = Node(ProbabilityToLevelset(),name='IC_Orientation')
-    IC_Orient.plugin_args = {'sbatch_args':'--mem 6000'}
+    IC_Orient = Node(ProbabilityToLevelset(), name="IC_Orientation")
+    IC_Orient.plugin_args = {'sbatch_args': '--mem 6000'}
     IC_Orient.inputs.save_data = True
-    wf.connect(subjectList,('subject_id',createOutputDir,wf.base_dir,wf.name,IC_Orient.name),IC_Orient,'output_dir')
-    wf.connect(RmVentICirn,'out_file',IC_Orient,'probability_image')
+    wf.connect(subjectList, ("subject_id", createOutputDir,
+                             wf.base_dir, wf.name, IC_Orient.name),
+               IC_Orient, "output_dir")
+    wf.connect(RmVentICirn, "out_file", IC_Orient, "probability_image")
     
     # Recursive Ridge Diffusion : PVS in IC only
-    IC_pvs = Node(RecursiveRidgeDiffusion(),name='RecursiveRidgeDiffusion2')
-    IC_pvs.plugin_args = {'sbatch_args':'--mem 6000'}
-    IC_pvs.inputs.ridge_intensities = "bright"
-    IC_pvs.inputs.ridge_filter = "1D"
-    IC_pvs.inputs.orientation = "undefined"
+    IC_pvs = Node(RecursiveRidgeDiffusion(), name='RecursiveRidgeDiffusion2')
+    IC_pvs.plugin_args = {'sbatch_args': '--mem 6000'}
+    IC_pvs.inputs.ridge_intensities = 'bright'
+    IC_pvs.inputs.ridge_filter = '1D'
+    IC_pvs.inputs.orientation = 'undefined'
     IC_pvs.inputs.ang_factor = 1.0
     IC_pvs.inputs.min_scale = 0
     IC_pvs.inputs.max_scale = 3
-    IC_pvs.inputs.propagation_model = "diffusion"
+    IC_pvs.inputs.propagation_model = 'diffusion'
     IC_pvs.inputs.diffusion_factor = 1.0
     IC_pvs.inputs.similarity_scale = 1.0
     IC_pvs.inputs.neighborhood_size = 2
     IC_pvs.inputs.max_iter = 100
     IC_pvs.inputs.max_diff = 0.001
     IC_pvs.inputs.save_data = True
-    wf.connect(subjectList,('subject_id',createOutputDir,wf.base_dir,wf.name,IC_pvs.name),IC_pvs,'output_dir')
-    wf.connect(ERC,'background_proba',IC_pvs,'input_image')
-    wf.connect(IC_Orient,'levelset',IC_pvs,'surface_levelset')
-    wf.connect(RmVentICirn,'out_file',IC_pvs,'loc_prior')  
+    wf.connect(subjectList, ("subject_id", createOutputDir,
+                             wf.base_dir, wf.name, IC_pvs.name),
+               IC_pvs, "output_dir")
+    wf.connect(ERC, "background_proba", IC_pvs, "input_image")
+    wf.connect(IC_Orient, "levelset", IC_pvs, "surface_levelset")
+    wf.connect(RmVentICirn, "out_file", IC_pvs, "loc_prior")  
 
     # Extract Lesions : extract IC PVS
-    extract_IC_pvs = Node(LesionExtraction(),name='ExtractPVSfromIC')
-    extract_IC_pvs.plugin_args = {'sbatch_args':'--mem 6000'}
+    extract_IC_pvs = Node(LesionExtraction(), name="ExtractPVSfromIC")
+    extract_IC_pvs.plugin_args = {'sbatch_args': '--mem 6000'}
     extract_IC_pvs.inputs.gm_boundary_partial_vol_dist = 1.0
     extract_IC_pvs.inputs.csf_boundary_partial_vol_dist = 4.0
     extract_IC_pvs.inputs.lesion_clust_dist = 1.0
@@ -589,44 +596,48 @@ def Lesion_extractor(name='Lesion_Extractor',
     extract_IC_pvs.inputs.small_lesion_size = 4.0
     extract_IC_pvs.inputs.save_data = True
     extract_IC_pvs.inputs.atlas_file = atlas
-    wf.connect(subjectList,('subject_id',createOutputDir,wf.base_dir,wf.name,extract_IC_pvs.name),extract_IC_pvs,'output_dir')
-    wf.connect(IC_pvs,'propagation',extract_IC_pvs,'probability_image')
-    wf.connect(MGDM,'segmentation',extract_IC_pvs,'segmentation_image')
-    wf.connect(MGDM,'distance',extract_IC_pvs,'levelset_boundary_image')
-    wf.connect(RmVentICirn,'out_file',extract_IC_pvs,'location_prior_image') 
+    wf.connect(subjectList, ("subject_id", createOutputDir,
+                             wf.base_dir, wf.name, extract_IC_pvs.name),
+               extract_IC_pvs, "output_dir")
+    wf.connect(IC_pvs, "propagation", extract_IC_pvs, "probability_image")
+    wf.connect(MGDM, "segmentation", extract_IC_pvs, "segmentation_image")
+    wf.connect(MGDM, "distance", extract_IC_pvs, "levelset_boundary_image")
+    wf.connect(RmVentICirn, "out_file", extract_IC_pvs, "location_prior_image") 
    
     '''
     3rd branch
     '''
     
     # Image calculator :
-    RmInter = Node(ImageMaths(), name="RemoveInterVentricules")
-    RmInter.inputs.op_string = "-sub"
-    RmInter.inputs.out_file = "rminter.nii.gz"
-    wf.connect(ERC2,'region_pv',RmInter,"in_file")
-    wf.connect(DMRP,"inter_ventricular_pv", RmInter, "in_file2")
+    RmInter = Node(BinaryMaths(), name="RemoveInterVentricules")
+    RmInter.inputs.operation = 'sub'
+    RmInter.inputs.out_file = 'rminter.nii.gz'
+    wf.connect(ERC2, "region_pv", RmInter, "in_file")
+    wf.connect(DMRP, "inter_ventricular_pv", RmInter, "operand_file")
     
     # Image calculator :
-    AddVentHorns = Node(ImageMaths(), name="AddVentHorns")
-    AddVentHorns.inputs.op_string = "-add"
-    AddVentHorns.inputs.out_file = "rminter.nii.gz"
-    wf.connect(RmInter,'out_file',AddVentHorns,"in_file")
-    wf.connect(DMRP,"ventricular_horns_pv", AddVentHorns, "in_file2")
+    AddVentHorns = Node(BinaryMaths(), name="AddVentHorns")
+    AddVentHorns.inputs.operation = 'add'
+    AddVentHorns.inputs.out_file = 'rminter.nii.gz'
+    wf.connect(RmInter, "out_file", AddVentHorns, "in_file")
+    wf.connect(DMRP, "ventricular_horns_pv", AddVentHorns, "operand_file")
     
     # Intensity Range Normalization (5)
-    getMaxAddVentHorns = Node(ImageStats(op_string= '-r'), name="getMaxAddVentHorns")
-    wf.connect(AddVentHorns,'out_file',getMaxAddVentHorns,'in_file')
+    getMaxAddVentHorns = Node(ImageStats(op_string= '-r'),
+                              name="getMaxAddVentHorns")
+    wf.connect(AddVentHorns, "out_file", getMaxAddVentHorns, "in_file")
      
-    AddVentHornsirn = Node(AbcImageMaths(),name="IntensityNormalization7")
-    AddVentHornsirn.inputs.op_string = "-div"
-    AddVentHornsirn.inputs.out_file = "normAddVentHorns.nii.gz"
-    wf.connect(AddVentHorns,'out_file',AddVentHornsirn,'in_file')
-    wf.connect(getMaxAddVentHorns,('out_stat',getElementFromList,1),AddVentHornsirn,"op_value")
-    
+    AddVentHornsirn = Node(BinaryMaths(),name="IntensityNormalization7")
+    AddVentHornsirn.inputs.operation = 'div'
+    AddVentHornsirn.inputs.out_file = 'normAddVentHorns.nii.gz'
+    wf.connect(AddVentHorns, "out_file", AddVentHornsirn, "in_file")
+    wf.connect(getMaxAddVentHorns, ("out_stat", getElementFromList, 1),
+               AddVentHornsirn, "op_value")
+     
     
     # Extract Lesions : extract White Matter Hyperintensities
-    extract_WMH = Node(LesionExtraction(),name='Extract_WMH')
-    extract_WMH.plugin_args = {'sbatch_args':'--mem 6000'}
+    extract_WMH = Node(LesionExtraction(), name="Extract_WMH")
+    extract_WMH.plugin_args = {'sbatch_args': '--mem 6000'}
     extract_WMH.inputs.gm_boundary_partial_vol_dist = 1.0
     extract_WMH.inputs.csf_boundary_partial_vol_dist = 2.0
     extract_WMH.inputs.lesion_clust_dist = 1.0
@@ -635,11 +646,14 @@ def Lesion_extractor(name='Lesion_Extractor',
     extract_WMH.inputs.small_lesion_size = 4.0
     extract_WMH.inputs.save_data = True
     extract_WMH.inputs.atlas_file = atlas
-    wf.connect(subjectList,('subject_id',createOutputDir,wf.base_dir,wf.name,extract_WMH.name),extract_WMH,'output_dir')
-    wf.connect(ERC2,'background_proba',extract_WMH,'probability_image')
-    wf.connect(MGDM,'segmentation',extract_WMH,'segmentation_image')
-    wf.connect(MGDM,'distance',extract_WMH,'levelset_boundary_image')
-    wf.connect(AddVentHornsirn,'out_file',extract_WMH,'location_prior_image')
+    wf.connect(subjectList, ("subject_id", createOutputDir,
+                             wf.base_dir, wf.name, extract_WMH.name),
+               extract_WMH, "output_dir")
+    wf.connect(ERC2, "background_proba", extract_WMH, "probability_image")
+    wf.connect(MGDM, "segmentation", extract_WMH, "segmentation_image")
+    wf.connect(MGDM, "distance", extract_WMH, "levelset_boundary_image")
+    wf.connect(AddVentHornsirn, "out_file",
+               extract_WMH, "location_prior_image")
     
     #===========================================================================
     # extract_WMH2 = extract_WMH.clone(name='Extract_WMH2')
@@ -668,28 +682,30 @@ def Lesion_extractor(name='Lesion_Extractor',
     '''
          
     # Recursive Ridge Diffusion : round WMH detection
-    round_WMH = Node(RecursiveRidgeDiffusion(),name='round_WMH')
-    round_WMH.plugin_args = {'sbatch_args':'--mem 6000'}
-    round_WMH.inputs.ridge_intensities = "bright"
-    round_WMH.inputs.ridge_filter = "0D"
-    round_WMH.inputs.orientation = "undefined"
+    round_WMH = Node(RecursiveRidgeDiffusion(), name="round_WMH")
+    round_WMH.plugin_args = {'sbatch_args': '--mem 6000'}
+    round_WMH.inputs.ridge_intensities = 'bright'
+    round_WMH.inputs.ridge_filter = '0D'
+    round_WMH.inputs.orientation = 'undefined'
     round_WMH.inputs.ang_factor = 1.0
     round_WMH.inputs.min_scale = 1
     round_WMH.inputs.max_scale = 4
-    round_WMH.inputs.propagation_model = "none"
+    round_WMH.inputs.propagation_model = 'none'
     round_WMH.inputs.diffusion_factor = 1.0
     round_WMH.inputs.similarity_scale = 0.1
     round_WMH.inputs.neighborhood_size = 4
     round_WMH.inputs.max_iter = 100
     round_WMH.inputs.max_diff = 0.001
     round_WMH.inputs.save_data = True
-    wf.connect(subjectList,('subject_id',createOutputDir,wf.base_dir,wf.name,round_WMH.name),round_WMH,'output_dir')
-    wf.connect(ERC2,'background_proba',round_WMH,'input_image')
-    wf.connect(AddVentHornsirn,'out_file',round_WMH,'loc_prior')  
+    wf.connect(subjectList, ("subject_id", createOutputDir,
+                             wf.base_dir, wf.name, round_WMH.name),
+               round_WMH, "output_dir")
+    wf.connect(ERC2, "background_proba", round_WMH, "input_image")
+    wf.connect(AddVentHornsirn, "out_file", round_WMH, "loc_prior")  
      
     # Extract Lesions : extract round WMH
-    extract_round_WMH = Node(LesionExtraction(),name='Extract_round_WMH')
-    extract_round_WMH.plugin_args = {'sbatch_args':'--mem 6000'}
+    extract_round_WMH = Node(LesionExtraction(), name="Extract_round_WMH")
+    extract_round_WMH.plugin_args = {'sbatch_args': '--mem 6000'}
     extract_round_WMH.inputs.gm_boundary_partial_vol_dist = 1.0
     extract_round_WMH.inputs.csf_boundary_partial_vol_dist = 2.0
     extract_round_WMH.inputs.lesion_clust_dist = 1.0
@@ -698,11 +714,14 @@ def Lesion_extractor(name='Lesion_Extractor',
     extract_round_WMH.inputs.small_lesion_size = 6.0
     extract_round_WMH.inputs.save_data = True
     extract_round_WMH.inputs.atlas_file = atlas
-    wf.connect(subjectList,('subject_id',createOutputDir,wf.base_dir,wf.name,extract_round_WMH.name),extract_round_WMH,'output_dir')
-    wf.connect(round_WMH,'ridge_pv',extract_round_WMH,'probability_image')
-    wf.connect(MGDM,'segmentation',extract_round_WMH,'segmentation_image')
-    wf.connect(MGDM,'distance',extract_round_WMH,'levelset_boundary_image')
-    wf.connect(AddVentHornsirn,'out_file',extract_round_WMH,'location_prior_image')
+    wf.connect(subjectList, ("subject_id", createOutputDir,
+                             wf.base_dir, wf.name, extract_round_WMH.name),
+               extract_round_WMH, "output_dir")
+    wf.connect(round_WMH, "ridge_pv", extract_round_WMH, "probability_image")
+    wf.connect(MGDM, "segmentation", extract_round_WMH, "segmentation_image")
+    wf.connect(MGDM, "distance", extract_round_WMH, "levelset_boundary_image")
+    wf.connect(AddVentHornsirn, "out_file",
+               extract_round_WMH, "location_prior_image")
     
     #===========================================================================
     # extract_round_WMH2 = extract_round_WMH.clone(name='Extract_round_WMH2')
@@ -732,18 +751,18 @@ def Lesion_extractor(name='Lesion_Extractor',
     '''
 
     # Image calculator : WM + IC DVRS
-    DVRS = Node(ImageMaths(), name="DVRS")
-    DVRS.inputs.op_string = "-max"
-    DVRS.inputs.out_file = "DVRS_map.nii.gz"
-    wf.connect(extract_WM_pvs,'lesion_score',DVRS,"in_file")
-    wf.connect(extract_IC_pvs,"lesion_score", DVRS, "in_file2")
+    DVRS = Node(BinaryMaths(), name="DVRS")
+    DVRS.inputs.operation = 'max'
+    DVRS.inputs.out_file = 'DVRS_map.nii.gz'
+    wf.connect(extract_WM_pvs, "lesion_score", DVRS, "in_file")
+    wf.connect(extract_IC_pvs, "lesion_score", DVRS, "operand_file")
     
     # Image calculator : WMH + round
-    WMH = Node(ImageMaths(), name="WMH")
-    WMH.inputs.op_string = "-max"
-    WMH.inputs.out_file = "WMH_map.nii.gz"
-    wf.connect(extract_WMH,'lesion_score',WMH,"in_file")
-    wf.connect(extract_round_WMH,"lesion_score", WMH, "in_file2")
+    WMH = Node(BinaryMaths(), name="WMH")
+    WMH.inputs.operation = 'max'
+    WMH.inputs.out_file = 'WMH_map.nii.gz'
+    wf.connect(extract_WMH, "lesion_score", WMH, "in_file")
+    wf.connect(extract_round_WMH, "lesion_score", WMH, "operand_file")
     
     #===========================================================================
     # WMH2 = Node(ImageMaths(), name="WMH2")
@@ -760,11 +779,11 @@ def Lesion_extractor(name='Lesion_Extractor',
     #===========================================================================
     
     # Image calculator : multiply by boundnary partial volume
-    WMH_mul = Node(ImageMaths(), name="WMH_mul")
-    WMH_mul.inputs.op_string = "-mul"
-    WMH_mul.inputs.out_file = "final_mask.nii.gz"
-    wf.connect(WMH,"out_file", WMH_mul,"in_file")
-    wf.connect(MGDM,"distance", WMH_mul, "in_file2")
+    WMH_mul = Node(BinaryMaths(), name="WMH_mul")
+    WMH_mul.inputs.operation = 'mul'
+    WMH_mul.inputs.out_file = 'final_mask.nii.gz'
+    wf.connect(WMH, "out_file", WMH_mul,"in_file")
+    wf.connect(MGDM, "distance", WMH_mul, "operand_file")
     
     #===========================================================================
     # WMH2_mul = Node(ImageMaths(), name="WMH2_mul")
@@ -792,60 +811,60 @@ def Lesion_extractor(name='Lesion_Extractor',
     # Threshold binary mask : 
     DVRS_mask = Node(Threshold(), name="DVRS_mask")
     DVRS_mask.inputs.thresh = 0.25
-    DVRS_mask.inputs.direction = "below"
-    wf.connect(DVRS,"out_file", DVRS_mask, "in_file")
+    DVRS_mask.inputs.direction = 'below'
+    wf.connect(DVRS, "out_file", DVRS_mask, "in_file")
     
     # Threshold binary mask : 025
     WMH1_025 = Node(Threshold(), name="WMH1_025")
     WMH1_025.inputs.thresh = 0.25
-    WMH1_025.inputs.direction = "below"
-    wf.connect(WMH_mul,"out_file", WMH1_025, "in_file")
+    WMH1_025.inputs.direction = 'below'
+    wf.connect(WMH_mul, "out_file", WMH1_025, "in_file")
     
     #===========================================================================
     # WMH2_025 = Node(Threshold(), name="WMH2_025")
     # WMH2_025.inputs.thresh = 0.25
-    # WMH2_025.inputs.direction = "below"
+    # WMH2_025.inputs.direction = 'below'
     # wf.connect(WMH2_mul,"out_file", WMH2_025, "in_file")
     # 
     # WMH3_025 = Node(Threshold(), name="WMH3_025")
     # WMH3_025.inputs.thresh = 0.25
-    # WMH3_025.inputs.direction = "below"
+    # WMH3_025.inputs.direction = 'below'
     # wf.connect(WMH3_mul,"out_file", WMH3_025, "in_file")
     #===========================================================================
     
     # Threshold binary mask : 050
     WMH1_050 = Node(Threshold(), name="WMH1_050")
     WMH1_050.inputs.thresh = 0.50
-    WMH1_050.inputs.direction = "below"
-    wf.connect(WMH_mul,"out_file", WMH1_050, "in_file")
+    WMH1_050.inputs.direction = 'below'
+    wf.connect(WMH_mul, "out_file", WMH1_050, "in_file")
     
     #===========================================================================
     # WMH2_050 = Node(Threshold(), name="WMH2_050")
     # WMH2_050.inputs.thresh = 0.50
-    # WMH2_050.inputs.direction = "below"
+    # WMH2_050.inputs.direction = 'below'
     # wf.connect(WMH2_mul,"out_file", WMH2_050, "in_file")
     # 
     # WMH3_050 = Node(Threshold(), name="WMH3_050")
     # WMH3_050.inputs.thresh = 0.50
-    # WMH3_050.inputs.direction = "below"
+    # WMH3_050.inputs.direction = 'below'
     # wf.connect(WMH3_mul,"out_file", WMH3_050, "in_file")
     #===========================================================================
     
     # Threshold binary mask : 075
     WMH1_075 = Node(Threshold(), name="WMH1_075")
     WMH1_075.inputs.thresh = 0.75
-    WMH1_075.inputs.direction = "below"
-    wf.connect(WMH_mul,"out_file", WMH1_075, "in_file")
+    WMH1_075.inputs.direction = 'below'
+    wf.connect(WMH_mul, "out_file", WMH1_075, "in_file")
     
     #===========================================================================
     # WMH2_075 = Node(Threshold(), name="WMH2_075")
     # WMH2_075.inputs.thresh = 0.75
-    # WMH2_075.inputs.direction = "below"
+    # WMH2_075.inputs.direction = 'below'
     # wf.connect(WMH2_mul,"out_file", WMH2_075, "in_file")
     # 
     # WMH3_075 = Node(Threshold(), name="WMH3_075")
     # WMH3_075.inputs.thresh = 0.75
-    # WMH3_075.inputs.direction = "below"
+    # WMH3_075.inputs.direction = 'below'
     # wf.connect(WMH3_mul,"out_file", WMH3_075, "in_file")
     #===========================================================================
     
