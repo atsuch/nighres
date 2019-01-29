@@ -1,4 +1,5 @@
 FS_label_val,FS_label_name,brain-atlas-quant_label_val,brain-atlas-quant_label_name
+0,Background,1,Background
 2,Left-Cerebral-White-Matter,47,Cerebrum-WML
 3,Left-Cerebral-Cortex,26,Cerebrum-GML       
 4,Left-Lateral-Ventricle,11,VentricleL
@@ -17,7 +18,7 @@ FS_label_val,FS_label_name,brain-atlas-quant_label_val,brain-atlas-quant_label_n
 18,Left-Amygdala,30,AmygdalaL			
 24,CSF,13,Ventricle3
 26,Left-Accumbens-area ,32,CaudateL	                           
-28,Left-VentralDC,,
+28,Left-VentralDC,43,Brainstem
 30,Left-vessel,36,PutamenL	       
 31,Left-choroid-plexus,17,ChoroidPlexusL
 41,Right-Cerebral-White-Matter,48,Cerebrum-WMR
@@ -34,12 +35,12 @@ FS_label_val,FS_label_name,brain-atlas-quant_label_val,brain-atlas-quant_label_n
 53,Right-Hippocampus,35,HippocampusR       
 54,Right-Amygdala,31,AmygdalaR	
 58,Right-Accumbens-area,33,CaudateR      
-60,Right-VentralDC,,
+60,Right-VentralDC,43,Brainstem
 62,Right-vessel,37,PutamenR    
 63,Right-choroid-plexus,18,ChoroidPlexusR
-77,WM-hypointensities,,
-251,CC_Posterior                            ,,
-252,CC_Mid_Posterior                        ,,
-253,CC_Central                              ,,
-254,CC_Mid_Anterior                         ,,
-255,CC_Anterior ,,
+77,WM-hypointensities,48,Cerebrum-WMR
+251,CC_Posterior,48,Cerebrum-WMR
+252,CC_Mid_Posterior,48,Cerebrum-WMR
+253,CC_Central,48,Cerebrum-WMR
+254,CC_Mid_Anterior,48,Cerebrum-WMR
+255,CC_Anterior,48,Cerebrum-WMR
